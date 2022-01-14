@@ -130,6 +130,7 @@ class _WalletTabHomePageState extends State<WalletTabHomePage> {
 
   void loadAddressInfo(String address) async {
     try {
+
       String url=Global.IpPort+"listunspent/"+Global.ForkId+"/"+address;
       var response = await Dio().get(url);
       var jsonResult = response.data;
