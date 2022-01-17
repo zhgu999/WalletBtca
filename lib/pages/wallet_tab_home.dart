@@ -1,23 +1,34 @@
+import 'dart:collection';
 import 'dart:convert';
 import 'dart:ffi';
+import 'dart:typed_data';
 
+import 'package:BBCHDWallet/crypto/base32.dart';
 import 'package:BBCHDWallet/data/Global.dart';
+import 'package:BBCHDWallet/data/send_transaction.dart';
 import 'package:BBCHDWallet/data/wallet_data_center.dart';
+import 'package:BBCHDWallet/data/wallet_popularize.dart';
 import 'package:BBCHDWallet/data/wallet_utxo_database.dart';
 import 'package:BBCHDWallet/pages/wallet_my_vote.dart';
-import 'package:BBCHDWallet/pages/wallet_popularize.dart';
 import 'package:BBCHDWallet/pages/wallet_receive_transaction.dart';
 import 'package:BBCHDWallet/pages/wallet_send_transaction.dart';
 import 'package:BBCHDWallet/pages/wallet_send_vote.dart';
 import 'package:BBCHDWallet/pages/wallet_vote_reward.dart';
+import 'package:barcode_scan/barcode_scan.dart';
 import 'package:dio/dio.dart';
+import 'package:ed25519_dart_base/ed25519_dart.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_easyrefresh/easy_refresh.dart';
+import 'package:qr_flutter/qr_flutter.dart';
+import 'package:hex/hex.dart';
+import 'package:toast/toast.dart';
+
 
 class WalletTabHomePage extends StatefulWidget {
   WalletTabHomePage({Key key, this.accountAddress}) : super(key: key);
   final String accountAddress;
+
   @override
   State<StatefulWidget> createState() {
     return _WalletTabHomePageState();
@@ -27,10 +38,22 @@ class WalletTabHomePage extends StatefulWidget {
 class _WalletTabHomePageState extends State<WalletTabHomePage> {
   // 投票数据
   List<Map<String, dynamic>> _votelistData = List<Map<String, dynamic>>();
+
   // 历史记录
   List<Map<String, dynamic>> _historyListData = List<Map<String, dynamic>>();
+
   // 个人账号数据
   Map<String, dynamic> _addressInfoData = Map<String, dynamic>();
+
+  //上下级关系数据
+  List<Map<String, dynamic>> _parentReleationData =
+      List<Map<String, dynamic>>();
+  List<Map<String, dynamic>> _childReleationData = List<Map<String, dynamic>>();
+
+  //推广算法对象
+  var _popularize = new popularize();
+  //作为下级的二维码
+  String subSignInfo = '';
 
   static const List<int> topConfig = <int>[1, 2, 3];
 
@@ -53,12 +76,9 @@ class _WalletTabHomePageState extends State<WalletTabHomePage> {
       this.loadAddressInfo(widget.accountAddress);
       this.loadTransctionHistory(widget.accountAddress);
     } else if (index == 2) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-            builder: (context) => WalletPopularize()),
-      );
-
+      this.loadPopularizeInfo();
+    } else if (index == 3) {
+      this.getReleationData();
     }
     setState(() {
       _selectedIndex = index;
@@ -70,13 +90,16 @@ class _WalletTabHomePageState extends State<WalletTabHomePage> {
     Widget w;
     if (_selectedIndex == 1) {
       w = createVoteWidget(_votelistData);
-    } else if(_selectedIndex == 0){
+    } else if (_selectedIndex == 0) {
       w = createAddressInfoWidget(_addressInfoData);
-    } else if (_selectedIndex == 2){
-      // WalletDataCenter.getInstance().accountAddress = '123456789qwertyuiop';
-      // w = WalletPopularize();
+    } else if (_selectedIndex == 2) {
+      w = createPopularizeWidget();
+    } else if (_selectedIndex == 3) {
+      w = createReleadtionWidget();
     }
-      return Scaffold(
+
+
+    return Scaffold(
       appBar: AppBar(
         title: const Text('BTCA Wallet'),
       ),
@@ -94,10 +117,15 @@ class _WalletTabHomePageState extends State<WalletTabHomePage> {
           BottomNavigationBarItem(
             icon: Icon(Icons.account_tree_outlined),
             title: Text('分享'),
-          )
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.apartment_outlined),
+            title: Text('推广'),
+          ),
         ],
         currentIndex: _selectedIndex,
         selectedItemColor: Colors.amber[800],
+        type: BottomNavigationBarType.fixed,
         onTap: _onItemTapped,
       ),
     );
@@ -105,8 +133,8 @@ class _WalletTabHomePageState extends State<WalletTabHomePage> {
 
   Future loadVoteList() async {
     try {
-      var response = await Dio().get(
-          Global.IpPort+ '/getnodevotelist.ashx?addr=${widget.accountAddress}');
+      var response = await Dio().get(Global.IpPort +
+          '/getnodevotelist.ashx?addr=${widget.accountAddress}');
       var jsonResult = jsonDecode(response.data);
       print(jsonResult);
       if (jsonResult is Map) {
@@ -130,14 +158,15 @@ class _WalletTabHomePageState extends State<WalletTabHomePage> {
 
   void loadAddressInfo(String address) async {
     try {
-      String url=Global.IpPort+"listunspent/"+Global.ForkId+"/"+address;
+      String url =
+          Global.IpPort + "listunspent/" + Global.ForkId + "/" + address;
       var response = await Dio().get(url);
       var jsonResult = response.data;
       print(jsonResult);
       if (jsonResult is Map<String, dynamic>) {
         var addresses = jsonResult["addresses"];
         if (addresses is List) {
-          var unspents=   addresses[0]["unspents"];
+          var unspents = addresses[0]["unspents"];
           await this.saveUnspents(unspents);
         }
         setState(() {
@@ -151,7 +180,7 @@ class _WalletTabHomePageState extends State<WalletTabHomePage> {
 
   void loadTransctionHistory(String address) async {
     try {
-      var url =Global.IpPort+"transctions/"+address;
+      var url = Global.IpPort + "transctions/" + address;
       var response = await Dio().get(url);
       // var jsonResult = jsonDecode(response.data);
       var jsonResult = response.data;
@@ -223,7 +252,6 @@ class _WalletTabHomePageState extends State<WalletTabHomePage> {
   }
 
   Widget createHistoryItem(Map<String, dynamic> item, int index) {
-
     print(item["flag"]);
     var flag = item["flag"] ?? 0;
 
@@ -247,19 +275,19 @@ class _WalletTabHomePageState extends State<WalletTabHomePage> {
             ),
             Text(item["time"],
                 style: TextStyle(fontSize: 18, color: Colors.grey)),
-            Expanded(flex: 1,
+            Expanded(
+              flex: 1,
               child: Text(''),
             ),
-            SizedBox(width: 54,),
+            SizedBox(
+              width: 54,
+            ),
             Image.asset(operate),
-           
             Text(item["amount"],
                 style: TextStyle(
                     fontSize: 20,
-                    color: (flag == 2)
-                        ? Colors.red[400]
-                        : Colors.green[300])),
-                   Expanded(
+                    color: (flag == 2) ? Colors.red[400] : Colors.green[300])),
+            Expanded(
               flex: 3,
               child: Text(''),
             ),
@@ -470,5 +498,141 @@ class _WalletTabHomePageState extends State<WalletTabHomePage> {
         ),
       ],
     ));
+  }
+
+  loadPopularizeInfo(){
+   _popularize.createShareKey();
+
+   var subPriveKey = WalletDataCenter.getInstance().accountPrivateKey;
+   setState(() {
+     subSignInfo = _popularize.subPopularizeInfo(
+         _popularize.SharePubKey, _popularize.SharePriveKey, subPriveKey);
+   });
+  }
+
+  Widget createPopularizeWidget() {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        SizedBox(
+          height: 10,
+        ),
+        QrImage(
+          data: '$subSignInfo',
+          version: QrVersions.auto,
+          size: 200.0,
+        ),
+        SizedBox(
+          height: 10,
+        ),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Text(
+              '使用右侧相机扫描下级二维码',
+              style: TextStyle(fontSize: 10, color: Colors.black),
+            ),
+            IconButton(
+              icon: Icon(Icons.camera_alt),
+              onPressed: () async {
+                String barcode = await BarcodeScanner.scan();
+                print(barcode);
+
+                List<String> tmp = barcode.split("|").toList();
+                var subSignInfo = tmp[0];
+                var sharePriveKey = tmp[1];
+                var subPublickey = tmp[2];
+
+
+                var sharePriveKeyHex = HEX.decode(sharePriveKey); //共享私钥
+                var publickey = publicKey(Uint8List.fromList(sharePriveKeyHex.reversed.toList()));
+                var sharePubKey = HEX.encode(publickey.reversed.toList()); //共享公钥
+
+
+                String parentSignInfo =_popularize.parentPopularizeInfo(sharePriveKey, WalletDataCenter.getInstance().accountPublicKey);
+                var vchData = _popularize.createTransaction(sharePubKey, subSignInfo, parentSignInfo);
+
+                var send = SendTransaction();
+                var subAddress = publicKeyString(subPublickey);
+                send.sendTransactionCoin("defi-relation", subAddress, 0.01, comment: vchData).then((
+                    value) {
+                  if (value != null) {
+                    if (value["code"] == null) {
+                      Toast.show("推广成功", context,duration: Toast.LENGTH_LONG, gravity: Toast.CENTER);
+                      return;
+                    }
+                    else{
+                      Toast.show(value.toString(), context,duration: Toast.LENGTH_LONG, gravity: Toast.CENTER);
+                      return;
+                    }
+                  };
+                });
+
+              },
+            ),
+          ],
+        ),
+
+      ],
+    );
+  }
+
+
+  void getReleationData() async {
+    var parentResponse = await Dio().get(Global.IpPort+'releationByLower/'+WalletDataCenter.getInstance().accountAddress);
+    _parentReleationData = parentResponse.data.cast<Map<String,dynamic>>();
+    if(_parentReleationData!=null&&_parentReleationData.length>0){
+      Map map=new LinkedHashMap();
+      map["upper"]="我的上级";
+      _parentReleationData.add(map);
+    }
+
+    // var childResponse = await Dio().get(Global.IpPort+'releationByUpper/'+WalletDataCenter.getInstance().accountAddress);
+    var url="http://159.138.123.135:9906/releationByUpper/1632srrskscs1d809y3x5ttf50f0gabf86xjz2s6aetc9h9ewwhm58dj3";
+    var childResponse = await Dio().get(url);
+    _childReleationData = childResponse.data.cast<Map<String,dynamic>>();
+    if(_childReleationData!=null&&_childReleationData.length>0){
+      Map map=new LinkedHashMap();
+      map["lower"]="我的下级";
+      map["id"]=0;
+      map["upper"]="";
+      map["txid"]="";
+      _childReleationData.add(map);
+    }
+
+  }
+
+  Widget createReleadtionWidget() {
+    return EasyRefresh(
+        onRefresh: () async {
+          getReleationData();
+        },
+        child: ListView.builder(
+          itemBuilder: (BuildContext context, int index) {
+            if(_childReleationData!=null &&_childReleationData.length>0) {
+              var item = _childReleationData[index];
+              return new Column(
+                  mainAxisAlignment: MainAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(item["lower"], style: TextStyle(fontSize: 10)),
+                  ]);
+            }
+
+            if(_parentReleationData!=null &&_parentReleationData.length>0) {
+              var item = _parentReleationData[index];
+              return new Column(
+                  mainAxisAlignment: MainAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(item["upper"], style: TextStyle(fontSize: 10)),
+                  ]);
+            }
+          },
+          itemCount: _childReleationData.length+_parentReleationData.length,
+        )
+    );
   }
 }

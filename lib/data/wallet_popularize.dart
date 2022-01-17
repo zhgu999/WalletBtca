@@ -3,38 +3,23 @@ import 'dart:typed_data';
 
 import 'package:BBCHDWallet/crypto/base32.dart';
 import 'package:BBCHDWallet/data/Global.dart';
-import 'package:BBCHDWallet/data/send_transaction.dart';
 import 'package:BBCHDWallet/data/wallet_data_center.dart';
 import 'package:dio/dio.dart';
 import 'package:ed25519_dart_base/ed25519_dart.dart';
-import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:pointycastle/digests/blake2b.dart';
-import 'package:qr_flutter/qr_flutter.dart';
-import 'package:toast/toast.dart';
 import 'package:bip39/bip39.dart' as bip39;
 import 'package:hex/hex.dart';
 import 'dart:convert' show utf8;
-import 'package:barcode_scan/barcode_scan.dart';
 
-class WalletPopularize extends StatefulWidget {
-  WalletPopularize({Key key, this.address}) : super(key: key);
 
-  final String address;
 
-  @override
-  _walletPopularizeState createState() => _walletPopularizeState();
-}
-
-class _walletPopularizeState extends State<WalletPopularize> {
+class popularize  {
   List<Map<String, dynamic>> ParentReleationData = List<Map<String, dynamic>>();
   List<Map<String, dynamic>> ChildReleationData = List<Map<String, dynamic>>();
 
   String subSignInfo = '';
   String SharePriveKey='';
   String SharePubKey='';
-  String content = '';
 
   @override
   void initState() {
@@ -51,7 +36,6 @@ class _walletPopularizeState extends State<WalletPopularize> {
     // var  shared_pubkey = '06c4246621002576ec70545f04f2cb75378e3f1a16eca2c596fc1c64f52e122b';
     // print("----------------------------------------------------------------------");
 
-    super.initState();
     createShareKey();
     var subPriveKey = WalletDataCenter.getInstance().accountPrivateKey;
     // subPriveKey='1dc5a5956c2de69f597cf20da70523b024470ae789e1d2bfc157c9605f17a33a';
@@ -59,7 +43,6 @@ class _walletPopularizeState extends State<WalletPopularize> {
     // SharePriveKey='15c02b5f9eb6e516159c230011a87e57757645b53d3534958f910c08feb5c203';
     String subSignInfo =  subPopularizeInfo(SharePubKey,SharePriveKey,subPriveKey);
 
-    this.getReleationData();
     //上及绑定代码
     // var parentPubKey = WalletDataCenter.getInstance().accountPublicKey;
     // parentPubKey='68e4dca5989876ca64f16537e82d05c103e5695dfaf009a01632cb33639cc530';
@@ -98,12 +81,10 @@ class _walletPopularizeState extends State<WalletPopularize> {
    var signMsgHex = sign(HEX.decode(digestHex), Uint8List.fromList(subPrivateKeyHex.reversed.toList()), subPublickey);
    var signMsgStr= HEX.encode(signMsgHex);
    print("消息签名："+signMsgStr);
+
    //二维码信息
+   subSignInfo=signMsgStr +'|'+ sharePriveKey +'|'+ HEX.encode(subPublickey.reversed.toList());
 
-
-   setState(() {
-     subSignInfo=signMsgStr +'|'+ sharePriveKey +'|'+ HEX.encode(subPublickey.reversed.toList());
-   });
    //验证签名
    // bool b = verifySignature(signMsgHex, HEX.decode(digestHex), subPublickey);
    //下级被推广信息
@@ -142,125 +123,5 @@ class _walletPopularizeState extends State<WalletPopularize> {
     String  vchData = sharePubKeyTransform + subSign + parentSign;
     print("vchData:"+vchData);
     return vchData;
-  }
-
-  Future<void> getReleationData() async {
-    print(Global.IpPort+'releationByUpper/'+WalletDataCenter.getInstance().accountAddress);
-    var parentResponse = await Dio().get(Global.IpPort+'/releationByUpper/'+WalletDataCenter.getInstance().accountAddress);
-    ParentReleationData = jsonDecode(parentResponse.data);
-    print(ParentReleationData);
-
-    var childResponse = await Dio().get(Global.IpPort+'releationByUpper/'+WalletDataCenter.getInstance().accountAddress);
-    ChildReleationData = jsonDecode(childResponse.data);
-    print(ParentReleationData);
-  }
-
-  @override
-  Widget build(Object context) {
-    return Scaffold(
-        appBar: AppBar(
-          title: Text('分享'),
-        ),
-        body: Column(
-          mainAxisAlignment: MainAxisAlignment.start,
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            SizedBox(
-              height: 10,
-            ),
-            QrImage(
-              data: '$subSignInfo',
-              version: QrVersions.auto,
-              size: 200.0,
-            ),
-            SizedBox(
-              height: 10,
-            ),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Text(
-                  '使用右侧相机扫描下级二维码',
-                  style: TextStyle(fontSize: 10, color: Colors.black),
-                ),
-
-                IconButton(
-                  icon: Icon(Icons.camera_alt),
-                  onPressed: () {
-                    scan();
-                  },
-                ),
-
-
-              ],
-            ),
-            Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Text('我的上级',style: TextStyle(fontSize: 10, color: Colors.black)),
-                  ListView.builder(
-                    itemBuilder: (BuildContext context, int index) {
-                      // var item = ParentReleationData[index];
-
-                    },
-                    itemCount: ParentReleationData.length,
-                      shrinkWrap:true
-                  ),
-                ]
-            ),
-
-            Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Text('我的下级',style: TextStyle(fontSize: 10, color: Colors.black)),
-                  ListView.builder(
-                    itemBuilder: (BuildContext context, int index) {
-                      // var item = ChildReleationData[index];
-
-                    },
-                    itemCount: ChildReleationData.length,
-                      shrinkWrap:true
-                  ),
-                ]
-            ),
-
-          ],
-        ));
-  }
-
-
-  scan() async {
-    String barcode = await BarcodeScanner.scan();
-    print(barcode);
-    setState(() {
-      content = barcode;
-    });
-    List<String> tmp = content.split("|").toList();
-    var subSignInfo = tmp[0];
-    var sharePriveKey = tmp[1];
-    var subPublickey = tmp[2];
-
-
-    var sharePriveKeyHex = HEX.decode(sharePriveKey); //共享私钥
-    var publickey = publicKey(Uint8List.fromList(sharePriveKeyHex.reversed.toList()));
-    var sharePubKey = HEX.encode(publickey.reversed.toList()); //共享公钥
-
-    String parentSignInfo = parentPopularizeInfo(sharePriveKey, WalletDataCenter.getInstance().accountPublicKey);
-    var vchData = createTransaction(sharePubKey, subSignInfo, parentSignInfo);
-    var send = SendTransaction();
-
-    var subAddress = publicKeyString(subPublickey);
-    send.sendTransactionCoin("defi-relation", subAddress, 0.01, comment: vchData).then((
-        value) {
-      if (value != null) {
-        if (value["code"] == null) {
-          Toast.show("推广成功", context,duration: Toast.LENGTH_LONG, gravity: Toast.CENTER);
-          return;
-        }
-      };
-    });
   }
 }
