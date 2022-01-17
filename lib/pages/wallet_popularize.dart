@@ -165,7 +165,7 @@ class _walletPopularizeState extends State<WalletPopularize> {
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 Text(
-                  '${content}',
+                  '使用右侧相机扫描下级二维码',
                   style: TextStyle(fontSize: 10, color: Colors.black),
                 ),
 
@@ -176,18 +176,7 @@ class _walletPopularizeState extends State<WalletPopularize> {
                   },
                 ),
 
-                IconButton(
-                  color: Colors.grey,
-                  icon: Image.asset('assets/images/copy_icon.png'),
-                  onPressed: () {
-                    ClipboardData data = ClipboardData(
-                        text: WalletDataCenter.getInstance().accountAddress);
-                    Clipboard.setData(data).then((value) {
-                      Toast.show("已复制", context,
-                          duration: Toast.LENGTH_LONG, gravity: Toast.CENTER);
-                    });
-                  },
-                )
+
               ],
             )
           ],
@@ -219,9 +208,10 @@ class _walletPopularizeState extends State<WalletPopularize> {
     send.sendTransactionCoin("defi-relation", subAddress, 0.01, comment: vchData).then((
         value) {
       if (value != null) {
-        Toast.show(value.toString(), context,
-            duration: Toast.LENGTH_LONG, gravity: Toast.CENTER);
-        return;
+        if (value["code"] == null) {
+          Toast.show("推广成功", context,duration: Toast.LENGTH_LONG, gravity: Toast.CENTER);
+          return;
+        }
       };
     });
   }
