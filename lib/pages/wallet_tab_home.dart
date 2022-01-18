@@ -23,7 +23,7 @@ import 'package:flutter_easyrefresh/easy_refresh.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:hex/hex.dart';
 import 'package:toast/toast.dart';
-
+import 'package:webview_flutter/webview_flutter.dart';
 
 class WalletTabHomePage extends StatefulWidget {
   WalletTabHomePage({Key key, this.accountAddress}) : super(key: key);
@@ -36,9 +36,6 @@ class WalletTabHomePage extends StatefulWidget {
 }
 
 class _WalletTabHomePageState extends State<WalletTabHomePage> {
-  // 投票数据
-  List<Map<String, dynamic>> _votelistData = List<Map<String, dynamic>>();
-
   // 历史记录
   List<Map<String, dynamic>> _historyListData = List<Map<String, dynamic>>();
 
@@ -46,12 +43,11 @@ class _WalletTabHomePageState extends State<WalletTabHomePage> {
   Map<String, dynamic> _addressInfoData = Map<String, dynamic>();
 
   //上下级关系数据
-  List<Map<String, dynamic>> _parentReleationData =
-      List<Map<String, dynamic>>();
-  List<Map<String, dynamic>> _childReleationData = List<Map<String, dynamic>>();
+  List<Map<String, dynamic>> _releationData = List<Map<String, dynamic>>();
 
   //推广算法对象
   var _popularize = new popularize();
+
   //作为下级的二维码
   String subSignInfo = '';
 
@@ -71,7 +67,6 @@ class _WalletTabHomePageState extends State<WalletTabHomePage> {
 
   void _onItemTapped(int index) {
     if (index == 1) {
-      this.loadVoteList();
     } else if (index == 0) {
       this.loadAddressInfo(widget.accountAddress);
       this.loadTransctionHistory(widget.accountAddress);
@@ -89,15 +84,14 @@ class _WalletTabHomePageState extends State<WalletTabHomePage> {
   Widget build(BuildContext context) {
     Widget w;
     if (_selectedIndex == 1) {
-      w = createVoteWidget(_votelistData);
+      w = createHodingCoinWidget();
     } else if (_selectedIndex == 0) {
       w = createAddressInfoWidget(_addressInfoData);
     } else if (_selectedIndex == 2) {
       w = createPopularizeWidget();
     } else if (_selectedIndex == 3) {
-      w = createReleadtionWidget();
+      w = createReleadtionWidget(_releationData);
     }
-
 
     return Scaffold(
       appBar: AppBar(
@@ -112,7 +106,7 @@ class _WalletTabHomePageState extends State<WalletTabHomePage> {
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.card_membership),
-            title: Text('投票'),
+            title: Text('持币'),
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.account_tree_outlined),
@@ -131,35 +125,9 @@ class _WalletTabHomePageState extends State<WalletTabHomePage> {
     );
   }
 
-  Future loadVoteList() async {
-    try {
-      var response = await Dio().get(Global.IpPort +
-          '/getnodevotelist.ashx?addr=${widget.accountAddress}');
-      var jsonResult = jsonDecode(response.data);
-      print(jsonResult);
-      if (jsonResult is Map) {
-        setState(() {
-          List<dynamic> array = jsonResult["data"];
-          userVote = jsonResult["uservote"];
-          allVote = jsonResult["allvote"];
-          var temp = List<Map<String, dynamic>>();
-          for (var item in array) {
-            if (item is Map<String, dynamic>) {
-              temp.add(item);
-            }
-          }
-          _votelistData = temp;
-        });
-      }
-    } catch (e) {
-      print(e);
-    }
-  }
-
   void loadAddressInfo(String address) async {
     try {
-      String url =
-          Global.IpPort + "listunspent/" + Global.ForkId + "/" + address;
+      String url = Global.IpPort + "listunspent/" + Global.ForkId + "/" + address;
       var response = await Dio().get(url);
       var jsonResult = response.data;
       print(jsonResult);
@@ -209,8 +177,7 @@ class _WalletTabHomePageState extends State<WalletTabHomePage> {
     });
     var utxoProvider = WalletUTXOProvider();
 
-    var list = await utxoProvider
-        .getWalletUTXO(WalletDataCenter.getInstance().accountAddress);
+    var list = await utxoProvider.getWalletUTXO(WalletDataCenter.getInstance().accountAddress);
     int localLastTime = list?.first?.txTime ?? 0;
     int remoteLastTime = unspents.first["time"] ?? 0;
 
@@ -232,6 +199,14 @@ class _WalletTabHomePageState extends State<WalletTabHomePage> {
         await utxoProvider.insert(utxo);
       }
     }
+  }
+
+  Widget createHodingCoinWidget() {
+    return Scaffold(
+        body: Center(
+            child: WebView(
+              initialUrl: "https://www.jianshu.com/p/f6bccc30cd33",
+            )));
   }
 
   Widget createAddressInfoWidget(Map<String, dynamic> addressInfoData) {
@@ -273,8 +248,7 @@ class _WalletTabHomePageState extends State<WalletTabHomePage> {
             SizedBox(
               width: 10,
             ),
-            Text(item["time"],
-                style: TextStyle(fontSize: 18, color: Colors.grey)),
+            Text(item["time"], style: TextStyle(fontSize: 18, color: Colors.grey)),
             Expanded(
               flex: 1,
               child: Text(''),
@@ -283,10 +257,7 @@ class _WalletTabHomePageState extends State<WalletTabHomePage> {
               width: 54,
             ),
             Image.asset(operate),
-            Text(item["amount"],
-                style: TextStyle(
-                    fontSize: 20,
-                    color: (flag == 2) ? Colors.red[400] : Colors.green[300])),
+            Text(item["amount"], style: TextStyle(fontSize: 20, color: (flag == 2) ? Colors.red[400] : Colors.green[300])),
             Expanded(
               flex: 3,
               child: Text(''),
@@ -325,10 +296,7 @@ class _WalletTabHomePageState extends State<WalletTabHomePage> {
             mainAxisAlignment: MainAxisAlignment.start,
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              Padding(
-                  padding: EdgeInsets.only(left: 10),
-                  child: Text(sum,
-                      style: TextStyle(color: Colors.white, fontSize: 30))),
+              Padding(padding: EdgeInsets.only(left: 10), child: Text(sum, style: TextStyle(color: Colors.white, fontSize: 30))),
               Text("BTCA", style: TextStyle(color: Colors.white, fontSize: 20))
             ],
           ),
@@ -339,47 +307,31 @@ class _WalletTabHomePageState extends State<WalletTabHomePage> {
             mainAxisAlignment: MainAxisAlignment.start,
             children: [
               SizedBox(
-                width: 10,
+                width: 50,
               ),
               RaisedButton(
                 child: Text('转账'),
                 onPressed: () {
                   Navigator.push(
                     context,
-                    MaterialPageRoute(
-                        builder: (context) => WalletSendTransactionPage()),
+                    MaterialPageRoute(builder: (context) => WalletSendTransactionPage()),
                   );
                 },
               ),
               SizedBox(
-                width: 10,
+                width: 50,
               ),
               RaisedButton(
                 child: Text('收款'),
                 onPressed: () {
                   Navigator.push(
                     context,
-                    MaterialPageRoute(
-                        builder: (context) => WalletReceiveTransactionPage()),
+                    MaterialPageRoute(builder: (context) => WalletReceiveTransactionPage()),
                   );
                 },
               ),
               SizedBox(
-                width: 10,
-              ),
-              RaisedButton(
-                onPressed: () {
-                  print(WalletDataCenter.getInstance().accountAddress);
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                        builder: (context) => WalletVoteRewardPage(
-                              address:
-                                  WalletDataCenter.getInstance().accountAddress,
-                            )),
-                  );
-                },
-                child: Text('投票收益'),
+                width: 50,
               ),
             ],
           ),
@@ -391,123 +343,12 @@ class _WalletTabHomePageState extends State<WalletTabHomePage> {
     );
   }
 
-  Widget createVoteWidget(List<Map<String, dynamic>> listData) {
-    return EasyRefresh(
-        onRefresh: () async {
-          await this.loadVoteList();
-        },
-        child: ListView.builder(
-          itemBuilder: (BuildContext context, int index) {
-            if (index == 0) {
-              return createVoteHeader();
-            }
-            var item = listData[index - 1];
-            return createCustomerItem(item, index);
-          },
-          itemCount: _votelistData.length + 1,
-        ));
-  }
-
-  Widget createVoteHeader() {
-    return Padding(
-      padding: EdgeInsets.fromLTRB(10, 0, 10, 0),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Column(
-            mainAxisAlignment: MainAxisAlignment.start,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('我的投票:$userVote'),
-              Text('全网投票:$allVote '),
-            ],
-          ),
-          RaisedButton(
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                    builder: (context) => WalletMyVotePage(
-                          address:
-                              WalletDataCenter.getInstance().accountAddress,
-                        )),
-              );
-            },
-            child: Text('撤投赎回'),
-          )
-        ],
-      ),
-    );
-  }
-
-  Widget createCustomerItem(Map<String, dynamic> item, int index) {
-    var column = Column(
-        mainAxisAlignment: MainAxisAlignment.start,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(item["nodename"], style: TextStyle(fontSize: 20)),
-          Row(
-            children: [
-              Text(item["amount"],
-                  style: TextStyle(fontSize: 12, color: Colors.grey)),
-              SizedBox(
-                width: 2,
-              ),
-              Text(item["rate"],
-                  style: TextStyle(fontSize: 12, color: Colors.grey[350]))
-            ],
-          ),
-        ]);
-    var defalutColor = Colors.black;
-    if (topConfig.contains(index)) {
-      defalutColor = Colors.deepOrange;
-    }
-    return Container(
-        child: Row(
-      mainAxisAlignment: MainAxisAlignment.start,
-      children: [
-        SizedBox(
-          width: 10,
-        ),
-        Text(
-          "$index",
-          style: TextStyle(fontSize: 18, color: defalutColor),
-        ),
-        SizedBox(
-          width: 10,
-        ),
-        column,
-        Expanded(
-          child: Text(''),
-        ),
-        RaisedButton(
-          child: Text('投票'),
-          onPressed: () {
-            String address = item["address"];
-            String addressName = item["nodename"];
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                  builder: (context) => WalletSendVotePage(
-                      address: address, addressName: addressName)),
-            );
-          },
-        ),
-        SizedBox(
-          width: 10,
-        ),
-      ],
-    ));
-  }
-
-  loadPopularizeInfo(){
-   _popularize.createShareKey();
-
-   var subPriveKey = WalletDataCenter.getInstance().accountPrivateKey;
-   setState(() {
-     subSignInfo = _popularize.subPopularizeInfo(
-         _popularize.SharePubKey, _popularize.SharePriveKey, subPriveKey);
-   });
+  void loadPopularizeInfo() {
+    _popularize.createShareKey();
+    var subPriveKey = WalletDataCenter.getInstance().accountPrivateKey;
+    setState(() {
+      subSignInfo = _popularize.subPopularizeInfo(_popularize.SharePubKey, _popularize.SharePriveKey, subPriveKey);
+    });
   }
 
   Widget createPopularizeWidget() {
@@ -545,94 +386,92 @@ class _WalletTabHomePageState extends State<WalletTabHomePage> {
                 var sharePriveKey = tmp[1];
                 var subPublickey = tmp[2];
 
-
                 var sharePriveKeyHex = HEX.decode(sharePriveKey); //共享私钥
                 var publickey = publicKey(Uint8List.fromList(sharePriveKeyHex.reversed.toList()));
                 var sharePubKey = HEX.encode(publickey.reversed.toList()); //共享公钥
 
-
-                String parentSignInfo =_popularize.parentPopularizeInfo(sharePriveKey, WalletDataCenter.getInstance().accountPublicKey);
+                String parentSignInfo = _popularize.parentPopularizeInfo(sharePriveKey, WalletDataCenter.getInstance().accountPublicKey);
                 var vchData = _popularize.createTransaction(sharePubKey, subSignInfo, parentSignInfo);
 
                 var send = SendTransaction();
                 var subAddress = publicKeyString(subPublickey);
-                send.sendTransactionCoin("defi-relation", subAddress, 0.01, comment: vchData).then((
-                    value) {
+                send.sendTransactionCoin("defi-relation", subAddress, 0.01, comment: vchData).then((value) {
                   if (value != null) {
                     if (value["code"] == null) {
-                      Toast.show("推广成功", context,duration: Toast.LENGTH_LONG, gravity: Toast.CENTER);
+                      Toast.show("推广成功", context, duration: Toast.LENGTH_LONG, gravity: Toast.CENTER);
+                      return;
+                    } else {
+                      Toast.show(value.toString(), context, duration: Toast.LENGTH_LONG, gravity: Toast.CENTER);
                       return;
                     }
-                    else{
-                      Toast.show(value.toString(), context,duration: Toast.LENGTH_LONG, gravity: Toast.CENTER);
-                      return;
-                    }
-                  };
+                  }
+                  ;
                 });
-
               },
             ),
           ],
         ),
-
       ],
     );
   }
 
-
   void getReleationData() async {
-    var parentResponse = await Dio().get(Global.IpPort+'releationByLower/'+WalletDataCenter.getInstance().accountAddress);
-    _parentReleationData = parentResponse.data.cast<Map<String,dynamic>>();
-    if(_parentReleationData!=null&&_parentReleationData.length>0){
-      Map map=new LinkedHashMap();
-      map["upper"]="我的上级";
-      _parentReleationData.add(map);
-    }
+    List<Map<String, dynamic>> releationData = new List<Map<String, dynamic>>();
 
     // var childResponse = await Dio().get(Global.IpPort+'releationByUpper/'+WalletDataCenter.getInstance().accountAddress);
-    var url="http://159.138.123.135:9906/releationByUpper/1632srrskscs1d809y3x5ttf50f0gabf86xjz2s6aetc9h9ewwhm58dj3";
+    var url = "http://159.138.123.135:9906/releationByUpper/1632srrskscs1d809y3x5ttf50f0gabf86xjz2s6aetc9h9ewwhm58dj3";
     var childResponse = await Dio().get(url);
-    _childReleationData = childResponse.data.cast<Map<String,dynamic>>();
-    if(_childReleationData!=null&&_childReleationData.length>0){
-      Map map=new LinkedHashMap();
-      map["lower"]="我的下级";
-      map["id"]=0;
-      map["upper"]="";
-      map["txid"]="";
-      _childReleationData.add(map);
+    List<Map<String, dynamic>> _childReleationData = childResponse.data.cast<Map<String, dynamic>>();
+    if (_childReleationData != null && _childReleationData.length > 0) {
+      Map<String, dynamic> map = new Map<String, dynamic>();
+      map["address"] = "我的下级";
+      releationData.add(map);
+
+      for (int i = 0; i < _childReleationData.length; i++) {
+        Map<String, dynamic> map = new Map<String, dynamic>();
+        map["address"] = _childReleationData[i]["lower"];
+        releationData.add(map);
+      }
     }
 
+    url = 'http://159.138.123.135:9906/releationByLower/2krmxc14txv3n2ykm4vh2q26mqt9a3dqgyaawj3yn1q1rb13z2hrfxzsp';
+    var parentResponse = await Dio().get(url);
+    // var parentResponse = await Dio().get(Global.IpPort+'releationByLower/'+WalletDataCenter.getInstance().accountAddress);
+    List<Map<String, dynamic>> _parentReleationData = parentResponse.data.cast<Map<String, dynamic>>();
+    if (_parentReleationData != null && _parentReleationData.length > 0) {
+      Map<String, dynamic> map = new Map<String, dynamic>();
+      map["address"] = "我的上级";
+      releationData.add(map);
+
+      for (int i = 0; i < _parentReleationData.length; i++) {
+        Map<String, dynamic> map = new Map<String, dynamic>();
+        map["address"] = _parentReleationData[i]["upper"];
+        releationData.add(map);
+      }
+    }
+    setState(() {
+      _releationData = releationData;
+    });
   }
 
-  Widget createReleadtionWidget() {
+  Widget createReleadtionWidget(List<Map<String, dynamic>> releationData) {
     return EasyRefresh(
         onRefresh: () async {
           getReleationData();
         },
         child: ListView.builder(
           itemBuilder: (BuildContext context, int index) {
-            if(_childReleationData!=null &&_childReleationData.length>0) {
-              var item = _childReleationData[index];
-              return new Column(
-                  mainAxisAlignment: MainAxisAlignment.start,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(item["lower"], style: TextStyle(fontSize: 10)),
-                  ]);
-            }
-
-            if(_parentReleationData!=null &&_parentReleationData.length>0) {
-              var item = _parentReleationData[index];
-              return new Column(
-                  mainAxisAlignment: MainAxisAlignment.start,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(item["upper"], style: TextStyle(fontSize: 10)),
-                  ]);
+            if (releationData != null && releationData.length > 0) {
+              var item = releationData[index];
+              return new Column(mainAxisAlignment: MainAxisAlignment.start, crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Padding(
+                  padding: EdgeInsets.all(10),
+                  child: Text(item["address"], style: TextStyle(fontSize: 15)),
+                ),
+              ]);
             }
           },
-          itemCount: _childReleationData.length+_parentReleationData.length,
-        )
-    );
+          itemCount: releationData.length,
+        ));
   }
 }
